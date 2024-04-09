@@ -129,6 +129,94 @@ function sampleRUM(checkpoint, data = {}) {
 }
 
 /**
+ * FROM lib-franklin.js
+ */
+class PluginsRegistry {
+  #plugins;
+
+  constructor() {
+    this.#plugins = new Map();
+  }
+
+  // Register a new plugin
+  add(id, config) {
+    const { id: pluginId, config: pluginConfig } = parsePluginParams(id, config);
+    this.#plugins.set(pluginId, pluginConfig);
+  }
+
+  // Get the plugin
+  get(id) { return this.#plugins.get(id); }
+
+  // Check if the plugin exists
+  includes(id) { return !!this.#plugins.has(id); }
+
+  // Load all plugins that are referenced by URL, and updated their configuration with the
+  // actual API they expose
+  async load(phase) {
+    [...this.#plugins.entries()]
+      .filter(([, plugin]) => plugin.condition
+      && !plugin.condition(document, plugin.options, executionContext))
+      .map(([id]) => this.#plugins.delete(id));
+    return Promise.all([...this.#plugins.entries()]
+      // Filter plugins that don't match the execution conditions
+      .filter(([, plugin]) => (
+        (!plugin.condition || plugin.condition(document, plugin.options, executionContext))
+        && phase === plugin.load && plugin.url
+      ))
+      .map(async ([key, plugin]) => {
+        try {
+          // If the plugin has a default export, it will be executed immediately
+          const pluginApi = (await loadModule(
+            key,
+            !plugin.url.endsWith('.js') ? `${plugin.url}/${key}.js` : plugin.url,
+            !plugin.url.endsWith('.js') ? `${plugin.url}/${key}.css` : null,
+            document,
+            plugin.options,
+            executionContext,
+          )) || {};
+          this.#plugins.set(key, { ...plugin, ...pluginApi });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('Could not load specified plugin', key);
+        }
+      }));
+  }
+
+  // Run a specific phase in the plugin
+  async run(phase) {
+    return [...this.#plugins.values()]
+      .reduce((promise, plugin) => ( // Using reduce to execute plugins sequencially
+        plugin[phase] && (!plugin.condition
+            || plugin.condition(document, plugin.options, executionContext))
+          ? promise.then(() => plugin[phase](document, plugin.options, executionContext))
+          : promise
+      ), Promise.resolve());
+  }
+}
+
+class TemplatesRegistry {
+  // Register a new template
+  // eslint-disable-next-line class-methods-use-this
+  add(id, url) {
+    if (Array.isArray(id)) {
+      id.forEach((i) => window.hlx.templates.add(i));
+      return;
+    }
+    const { id: templateId, config: templateConfig } = parsePluginParams(id, url);
+    templateConfig.condition = () => toClassName(getMetadata('template')) === templateId;
+    window.hlx.plugins.add(templateId, templateConfig);
+  }
+
+  // Get the template
+  // eslint-disable-next-line class-methods-use-this
+  get(id) { return window.hlx.plugins.get(id); }
+
+  // Check if the template exists
+  // eslint-disable-next-line class-methods-use-this
+  includes(id) { return window.hlx.plugins.includes(id); }
+}
+
+/**
  * Setup block utils.
  */
 function setup() {
@@ -136,6 +224,10 @@ function setup() {
   window.hlx.RUM_MASK_URL = 'full';
   window.hlx.codeBasePath = '';
   window.hlx.lighthouse = new URLSearchParams(window.location.search).get('lighthouse') === 'on';
+  // From lib-franklin.js
+  window.hlx.patchBlockConfig = [];
+  window.hlx.plugins = new PluginsRegistry();
+  window.hlx.templates = new TemplatesRegistry();
 
   const scriptEl = document.querySelector('script[src$="/scripts/scripts.js"]');
   if (scriptEl) {

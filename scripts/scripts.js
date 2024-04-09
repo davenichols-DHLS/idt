@@ -1,3 +1,4 @@
+/*
 import {
   sampleRUM,
   loadHeader,
@@ -16,6 +17,27 @@ import {
   loadBlock,
   decorateBlock,
 } from './lib-franklin.js';
+*/
+
+import {
+  sampleRUM,
+  buildBlock,
+  loadHeader,
+  loadFooter,
+  decorateButtons,
+  decorateIcons,
+  decorateSections,
+  decorateBlocks,
+  decorateTemplateAndTheme,
+  waitForLCP,
+  loadBlocks,
+  loadCSS,
+  toClassName,
+  getMetadata,
+  createOptimizedPicture,
+  loadBlock,
+  decorateBlock,
+} from './aem.js';
 
 import {
   div,
@@ -139,15 +161,6 @@ export function setJsonLd(data, name) {
   script.innerHTML = JSON.stringify(data);
   script.dataset.name = name;
   document.head.appendChild(script);
-}
-
-// Set the favicon
-function setFavicon() {
-  const faviconLink = document.querySelector("link[rel*='icon']") || document.createElement('link');
-  faviconLink.type = 'image/x-icon';
-  faviconLink.rel = 'shortcut icon';
-  faviconLink.href = `https://${window.location.hostname}/favicon.ico`;
-  document.getElementsByTagName('head')[0].appendChild(faviconLink);
 }
 
 /**
@@ -572,25 +585,6 @@ function getParameterByName(parameter, url = window.location.href) {
   if (!results[2]) return '';
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
-
-function loadUTMprams() {
-  /* eslint-disable no-eval */
-  const utmParameters = [
-    'utm_campaign',
-    'utm_source',
-    'utm_medium',
-    'utm_content',
-    'utm_term',
-    'utm_previouspage',
-  ];
-
-  utmParameters.forEach((param) => {
-    const value = getParameterByName(param);
-    if (value !== null) {
-      window.localStorage.setItem(`danaher_${param}`, value);
-    }
-  });
-}
 // UTM Paramaters check - end
 
 /**
@@ -616,8 +610,6 @@ async function loadLazy(doc) {
   sampleRUM('lazy');
   sampleRUM.observe(main.querySelectorAll('div[data-block-name]'));
   sampleRUM.observe(main.querySelectorAll('picture > img'));
-
-  loadUTMprams();
 }
 
 /**
@@ -634,247 +626,152 @@ function loadDelayed() {
   // load anything that can be postponed to the latest here
 }
 
-/**
- * Loads the page parameters for Adobe Target.
- * @returns {Object} The target parameters object.
- */
-function loadATPageParams() {
-  const id = window.location.pathname.replaceAll('/', '_').replace(/\.html$/, '').substring(1);
-  const skuId = getMetadata('sku');
-  const categoryId = getMetadata('fullcategory').split('|').pop();
-  const thumbnailURL = getMetadata('og:image');
-  const title = getMetadata('og:title');
-  const name = title.indexOf('| Danaher Life Sciences') > -1 ? title.split('| Danaher Life Sciences')[0] : title;
-  const message = getMetadata('og:description');
-  const pageUrl = getMetadata('og:url');
-  const brand = getMetadata('brand');
-  const page = window.location.pathname.split('/')[3];
-  const tags = getMetadata('article:tag');
-  const articleAuthor = getMetadata('authorname');
-  const articlePostDate = getMetadata('publishdate');
-  const articleReadTime = getMetadata('readingtime');
 
-  const targetParams = {
-    id,
-    skuId,
-    categoryId,
-    thumbnailURL,
-    name,
-    message,
-    pageUrl,
-    brand,
-    page,
-    tags,
-    articleAuthor,
-    articlePostDate,
-    articleReadTime,
-  };
-
-  return targetParams;
-}
 
 async function loadPage() {
-  setFavicon();
-  await window.hlx.plugins.load('eager');
-  window.targetGlobalSettings = {
-    clientCode: 'danaher',
-    cookieDomain: window.DanaherConfig.host,
-    imsOrgId: '08333E7B636A2D4D0A495C34@AdobeOrg',
-    secureOnly: true,
-    serverDomain: 'danaher.tt.omtrdc.net',
-    pageLoadEnabled: true,
-    withWebGLRenderer: false,
-  };
-  window.atPageParams = loadATPageParams();
-  window.targetPageParams = function getTargetPageParams() {
-    return {
-      at_property: '6aeb619e-92d9-f4cf-f209-6d88ff58af6a',
-      'entity.id': window.atPageParams?.id,
-      'entity.skuId': window.atPageParams?.skuId,
-      'entity.categoryId': window.atPageParams?.categoryId,
-      'entity.thumbnailURL': window.atPageParams?.thumbnailURL,
-      'entity.name': window.atPageParams?.name,
-      'entity.message': window.atPageParams?.message,
-      'entity.pageUrl': window.atPageParams?.pageUrl,
-      'entity.brand': window.atPageParams?.brand,
-      'entity.page': window.atPageParams?.page,
-      'entity.tags': window.atPageParams?.tags,
-      'entity.articleAuthor': window.atPageParams?.articleAuthor,
-      'entity.articlePostDate': window.atPageParams?.articlePostDate,
-      'entity.articleReadTime': window.atPageParams?.articleReadTime,
-      danaherCompany: localStorage.getItem('danaher_company') ? localStorage.getItem('danaher_company') : '',
-      utmCampaign: localStorage.getItem('danaher_utm_campaign') ? localStorage.getItem('danaher_utm_campaign') : '',
-      utmSource: localStorage.getItem('danaher_utm_source') ? localStorage.getItem('danaher_utm_source') : '',
-      utmMedium: localStorage.getItem('danaher_utm_medium') ? localStorage.getItem('danaher_utm_medium') : '',
-      utmContent: localStorage.getItem('danaher_utm_content') ? localStorage.getItem('danaher_utm_content') : '',
-    };
-  };
-  const urlTarget = window.location.pathname;
-  const regex = /^\/(us\/en\/products\.html)?$/; // matches only the homepage and /us/en/products.html
-  if (!regex.test(urlTarget)) {
-    await import('./at.js');
-  }
   await loadEager(document);
-  await window.hlx.plugins.load('lazy');
   await loadLazy(document);
   loadDelayed();
 }
 
-/**
- * Datalayer Function to get the 'page' object
- */
-function getDLPage() {
-  const page = {
-    title: document.querySelector('title').textContent.replace(/[\n\t]/gm, ''),
-    language: 'en',
-    locale: 'US',
-    level: 'top',
-    type: 'webpage',
-    keywords: '',
-    creationDate: getMetadata('creationdate'),
-    updateDate: getMetadata('updatedate'),
-  };
-
-  const path = window.location.pathname;
-  if (path === '/' || path === '/us/en' || path === '/us/en.html') {
-    page.level = 'top';
-    page.type = 'home';
-  } else if (path.includes('/us/en/news')) {
-    page.level = 'top';
-    page.type = 'news';
-  } else if (path.includes('/us/en/blog')) {
-    page.level = 'middle';
-    page.type = 'blog';
-  } else if (path.includes('/us/en/solutions')) {
-    page.level = 'middle';
-    page.type = 'solutions';
-  } else if (path.includes('/us/en/applications')) {
-    page.level = 'middle';
-    page.type = 'applications';
-  } else if (path.includes('/us/en/products')) {
-    if (path.includes('/us/en/products/family')) {
-      page.level = 'bottom';
-      page.type = 'family';
-    } else if (path.includes('/us/en/products/bundles')) {
-      page.level = 'bottom';
-      page.type = 'bundles';
-    } else if (path.includes('/us/en/products/sku')) {
-      page.level = 'bottom';
-      page.type = 'sku';
-    } else if (path.includes('/topics')) {
-      page.level = 'other';
-      page.type = 'topics';
-    } else {
-      page.level = 'bottom';
-      page.type = 'products';
-    }
-  } else if (path.includes('/us/en/library')) {
-    page.level = 'other';
-    page.type = 'library';
-  } else if (path.includes('/us/en/about-us')) {
-    page.level = 'top';
-    page.type = 'about-us';
-  } else if (path.includes('/us/en/expert')) {
-    page.level = 'top';
-    page.type = 'expert';
-  } else if (path.includes('/us/en/search') || path.includes('/us/en/danahersearch')) {
-    page.level = 'top';
-    page.type = 'search';
-  } else if (path.includes('/us/en/signin')) {
-    page.level = 'top';
-    page.type = 'signin';
-  } else if (path.includes('/us/en/legal')) {
-    page.level = 'top';
-    page.type = 'legal';
-  }
-  return page;
-}
-
-// Danaher Config - Start
-const urlParams = new URLSearchParams(window.location.search);
-const useProd = urlParams.get('useProd');
-if (window.location.host === 'lifesciences.danaher.com' || useProd === 'true') {
-  window.DanaherConfig = {
-    siteID: 'ls-us-en',
-    gtmID: 'GTM-THXPLCS',
-    munchkinID: '306-EHG-641',
-    marketoDomain: '//306-EHG-641.mktoweb.com',
-    quoteCartPath: '/us/en/quote-cart.html',
-    cartPath: '/us/en/cart.html',
-    addressesPath: '/us/en/addresses.html',
-    shippingPath: '/us/en/shipping.html',
-    paymentPath: '/us/en/payment.html',
-    receiptPath: '/us/en/receipt.html',
-    quoteSubmitPath: '/us/en/submit-quote.html',
-    intershopDomain: 'https://shop.lifesciences.danaher.com',
-    intershopPath: '/INTERSHOP/rest/WFS/DANAHERLS-LSIG-Site/-',
-    searchOrg: 'danaherproductionrfl96bkr',
-    searchKey: 'xxf2f10385-5a54-4a18-bb48-fd8025d6b5d2',
-    workflowProductKey: 'xx3d1b8da5-d1e9-4989-bbed-264a248a9e22',
-    workflowResourceKey: 'xxf6a8b387-10f2-4660-af5d-6d304d0a789d',
-    productKey: 'xxfb161aa6-0fa0-419f-af37-9c6d7784bf76',
-    familyProductKey: 'xx1ecd2a4f-8391-4c70-b3c0-2d589bda56b7',
-    familyResourceKey: 'xx9dd85afc-64b6-4295-bc5d-eb8285f96d52',
-    categoryProductKey: 'xx2a299d60-2cf1-48ab-b9d5-94daeb25f1d6',
-    categoryDetailKey: 'xx61910369-c1ab-4df9-8d8a-3092b1323fcc',
-    productRecommendationsKey: 'xx107716c0-1ccd-4a61-8717-6ca36b6cdb0e',
-    megaMenuPath: '/content/dam/danaher/system/navigation/megamenu_items_us.json',
-    coveoProductPageTitle: 'Product Page',
-    pdfEmbedKey: '4a472c386025439d8a4ce2493557f6e7',
-    host: 'lifesciences.danaher.com',
-  };
-} else {
-  window.DanaherConfig = {
-    siteID: 'ls-us-en',
-    gtmID: 'GTM-KCBGM2N',
-    munchkinID: '439-KNJ-322',
-    marketoDomain: '//439-KNJ-322.mktoweb.com',
-    quoteCartPath: '/us/en/quote-cart.html',
-    cartPath: '/us/en/cart.html',
-    addressesPath: '/us/en/addresses.html',
-    shippingPath: '/us/en/shipping.html',
-    paymentPath: '/us/en/payment.html',
-    receiptPath: '/us/en/receipt.html',
-    quoteSubmitPath: '/us/en/submit-quote.html',
-    intershopDomain: 'https://stage.shop.lifesciences.danaher.com',
-    intershopPath: '/INTERSHOP/rest/WFS/DANAHERLS-LSIG-Site/-',
-    searchOrg: 'danahernonproduction1892f3fhz',
-    searchKey: 'xx2a2e7271-78c3-4e3b-bac3-2fcbab75323b',
-    workflowProductKey: 'xx26ffc727-cc72-4bbd-98e3-34052f296382',
-    workflowResourceKey: 'xx14676f1d-cf4a-4a38-94f0-eda56e9920f1',
-    productKey: 'xx32da148e-dfd0-4725-a443-c05a7793afea',
-    familyProductKey: 'xx4e3989d6-93aa-4140-a227-19da35fcd1cc',
-    familyResourceKey: 'xx8274a91e-b29c-4267-8b3a-5022a2698605',
-    categoryProductKey: 'xxdf9d160d-f6e5-4c8c-969b-8570d7b81418',
-    categoryDetailKey: 'xxf2ea9bfd-bccb-4195-90fd-7757504fdc33',
-    productRecommendationsKey: 'xxea4d2c40-26e7-4e98-9377-d8ebe3f435ea',
-    megaMenuPath: '/content/dam/danaher/system/navigation/megamenu_items_us.json',
-    coveoProductPageTitle: 'Product Page',
-    pdfEmbedKey: '4a472c386025439d8a4ce2493557f6e7',
-    host: 'stage.lifesciences.danaher.com',
-  };
-}
-// Danaher Config - End
-
-// Datalayer Init - Start
-window.dataLayer = [];
-window.dataLayer.push({
-  user: {
-    customerID: '',
-    accountType: 'guest',
-    marketCode: '',
-    company: '',
-    role: '',
-    city: '',
-    state: '',
-    country: '',
-    postalCode: '',
-    lastVisit: '',
-  },
-});
-window.dataLayer.push({
-  page: getDLPage(),
-});
-// Datalayer Init - End
-
 loadPage();
+
+
+/* ------------------------------------------------------------------------------------------- */
+
+//
+//import {
+//  sampleRUM,
+//  buildBlock,
+//  loadHeader,
+//  loadFooter,
+//  decorateButtons,
+//  decorateIcons,
+//  decorateSections,
+//  decorateBlocks,
+//  decorateTemplateAndTheme,
+//  waitForLCP,
+//  loadBlocks,
+//  loadCSS,
+//} from './aem.js';
+//
+//const LCP_BLOCKS = []; // add your LCP blocks to the list
+//
+///**
+// * Builds hero block and prepends to main in a new section.
+// * @param {Element} main The container element
+// */
+//function buildHeroBlock(main) {
+//  const h1 = main.querySelector('h1');
+//  const picture = main.querySelector('picture');
+//  // eslint-disable-next-line no-bitwise
+//  if (h1 && picture && (h1.compareDocumentPosition(picture) & Node.DOCUMENT_POSITION_PRECEDING)) {
+//    const section = document.createElement('div');
+//    section.append(buildBlock('hero', { elems: [picture, h1] }));
+//    main.prepend(section);
+//  }
+//}
+//
+///**
+// * load fonts.css and set a session storage flag
+// */
+//async function loadFonts() {
+//  await loadCSS(`${window.hlx.codeBasePath}/styles/fonts.css`);
+//  try {
+//    if (!window.location.hostname.includes('localhost')) sessionStorage.setItem('fonts-loaded', 'true');
+//  } catch (e) {
+//    // do nothing
+//  }
+//}
+//
+///**
+// * Builds all synthetic blocks in a container element.
+// * @param {Element} main The container element
+// */
+//function buildAutoBlocks(main) {
+//  try {
+//    buildHeroBlock(main);
+//  } catch (error) {
+//    // eslint-disable-next-line no-console
+//    console.error('Auto Blocking failed', error);
+//  }
+//}
+//
+///**
+// * Decorates the main element.
+// * @param {Element} main The main element
+// */
+//// eslint-disable-next-line import/prefer-default-export
+//export function decorateMain(main) {
+//  // hopefully forward compatible button decoration
+//  decorateButtons(main);
+//  decorateIcons(main);
+//  buildAutoBlocks(main);
+//  decorateSections(main);
+//  decorateBlocks(main);
+//}
+//
+///**
+// * Loads everything needed to get to LCP.
+// * @param {Element} doc The container element
+// */
+//async function loadEager(doc) {
+//  document.documentElement.lang = 'en';
+//  decorateTemplateAndTheme();
+//  const main = doc.querySelector('main');
+//  if (main) {
+//    decorateMain(main);
+//    document.body.classList.add('appear');
+//    await waitForLCP(LCP_BLOCKS);
+//  }
+//
+//  try {
+//    /* if desktop (proxy for fast connection) or fonts already loaded, load fonts.css */
+//    if (window.innerWidth >= 900 || sessionStorage.getItem('fonts-loaded')) {
+//      loadFonts();
+//    }
+//  } catch (e) {
+//    // do nothing
+//  }
+//}
+//
+///**
+// * Loads everything that doesn't need to be delayed.
+// * @param {Element} doc The container element
+// */
+//async function loadLazy(doc) {
+//  const main = doc.querySelector('main');
+//  await loadBlocks(main);
+//
+//  const { hash } = window.location;
+//  const element = hash ? doc.getElementById(hash.substring(1)) : false;
+//  if (hash && element) element.scrollIntoView();
+//
+//  loadHeader(doc.querySelector('header'));
+//  loadFooter(doc.querySelector('footer'));
+//
+//  loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
+//  loadFonts();
+//
+//  sampleRUM('lazy');
+//  sampleRUM.observe(main.querySelectorAll('div[data-block-name]'));
+//  sampleRUM.observe(main.querySelectorAll('picture > img'));
+//}
+//
+///**
+// * Loads everything that happens a lot later,
+// * without impacting the user experience.
+// */
+//function loadDelayed() {
+//  // eslint-disable-next-line import/no-cycle
+//  window.setTimeout(() => import('./delayed.js'), 3000);
+//  // load anything that can be postponed to the latest here
+//}
+//
+//async function loadPage() {
+//  await loadEager(document);
+//  await loadLazy(document);
+//  loadDelayed();
+//}
+//
+//loadPage();
